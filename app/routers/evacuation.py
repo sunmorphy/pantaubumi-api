@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.evacuation import EvacuationPoint
 from app.schemas.evacuation import EvacuationResponse
+from app.schemas.response import APIResponse, ok
 from app.utils.geo import haversine
 
 router = APIRouter()
@@ -16,7 +17,7 @@ MAX_RESULTS = 10
 
 @router.get(
     "/evacuation",
-    response_model=List[EvacuationResponse],
+    response_model=APIResponse[List[EvacuationResponse]],
     summary="Get nearest evacuation points",
 )
 async def get_evacuation(
@@ -31,14 +32,13 @@ async def get_evacuation(
     result = await db.execute(select(EvacuationPoint))
     all_points = result.scalars().all()
 
-    # Compute distances and sort
     points_with_dist = [
         (point, haversine(lat, lng, point.lat, point.lng))
         for point in all_points
     ]
     points_with_dist.sort(key=lambda x: x[1])
 
-    return [
+    data = [
         EvacuationResponse(
             id=point.id,
             name=point.name,
@@ -48,6 +48,8 @@ async def get_evacuation(
             type=point.type,
             address=point.address,
             distance_km=round(dist, 2),
-        )
+        ).model_dump(mode="json")
         for point, dist in points_with_dist[:limit]
     ]
+
+    return ok(data=data)

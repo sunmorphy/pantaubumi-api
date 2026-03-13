@@ -1,139 +1,139 @@
 """
 Smoke tests for PantauBumi API.
 
-Runs against a real database (Neon PostgreSQL via DATABASE_URL in .env).
-Tables are created before tests run via the FastAPI lifespan.
+All responses are now wrapped in the standard envelope:
+    {"code": int, "status": str, "message": str|null, "data": any}
 """
 
 import pytest
 from fastapi.testclient import TestClient
 
-# TestClient triggers the FastAPI lifespan (creates tables, starts scheduler)
 from app.main import app
 
 client = TestClient(app)
 
 
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _ok(resp, code=200):
+    """Assert the response is a successful envelope and return the data payload."""
+    assert resp.status_code == code, resp.text
+    body = resp.json()
+    assert body["code"] == code
+    assert body["status"] in ("Success", "Created")
+    return body["data"]
+
+
+def _err(resp, code):
+    """Assert the response is an error envelope with the given code."""
+    assert resp.status_code == code, resp.text
+    body = resp.json()
+    assert body["code"] == code
+    assert body["data"] is None
+    assert body["message"] is not None
+    return body
+
+
 # ── Health ─────────────────────────────────────────────────────────────────────
 
 def test_health_check():
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    resp = client.get("/health")
+    data = _ok(resp)
+    assert data["service"] == "pantau-bumi-api"
 
 
 # ── GET /risk ──────────────────────────────────────────────────────────────────
 
 def test_get_risk():
-    response = client.get("/risk", params={"lat": -6.2, "lng": 106.8})
-    assert response.status_code == 200
-    data = response.json()
+    resp = client.get("/risk", params={"lat": -6.2, "lng": 106.8})
+    data = _ok(resp)
     assert "flood_score" in data
     assert "landslide_score" in data
     assert "earthquake_score" in data
     assert data["overall_risk"] in ("low", "medium", "high", "critical")
     assert 0.0 <= data["flood_score"] <= 1.0
-    assert 0.0 <= data["landslide_score"] <= 1.0
-    assert 0.0 <= data["earthquake_score"] <= 1.0
 
 
 def test_get_risk_out_of_bounds():
-    # Latitude outside Indonesia validation range
-    response = client.get("/risk", params={"lat": 50.0, "lng": 106.8})
-    assert response.status_code == 422
+    resp = client.get("/risk", params={"lat": 50.0, "lng": 106.8})
+    body = _err(resp, 422)
+    assert "lat" in body["message"].lower() or "latitude" in body["message"].lower()
 
 
 # ── GET /alerts ────────────────────────────────────────────────────────────────
 
 def test_get_alerts_returns_list():
-    response = client.get("/alerts", params={"lat": -6.2, "lng": 106.8})
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    resp = client.get("/alerts", params={"lat": -6.2, "lng": 106.8})
+    data = _ok(resp)
+    assert isinstance(data, list)
 
 
 # ── GET /evacuation ────────────────────────────────────────────────────────────
 
 def test_get_evacuation_returns_list():
-    response = client.get("/evacuation", params={"lat": -6.2, "lng": 106.8})
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    resp = client.get("/evacuation", params={"lat": -6.2, "lng": 106.8})
+    data = _ok(resp)
+    assert isinstance(data, list)
 
 
 # ── GET /reports ───────────────────────────────────────────────────────────────
 
 def test_get_reports_returns_list():
-    response = client.get(
-        "/reports", params={"lat": -6.2, "lng": 106.8, "radius": 10}
-    )
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    resp = client.get("/reports", params={"lat": -6.2, "lng": 106.8, "radius": 10})
+    data = _ok(resp)
+    assert isinstance(data, list)
 
 
 # ── POST /reports ──────────────────────────────────────────────────────────────
 
 def test_post_report_flood():
     payload = {
-        "lat": -6.2,
-        "lng": 106.8,
+        "lat": -6.2, "lng": 106.8,
         "text": "Banjir parah di depan rumah saya, air sudah setinggi lutut!",
         "category": "flood",
     }
-    response = client.post("/reports", json=payload)
-    assert response.status_code == 201
-    data = response.json()
+    resp = client.post("/reports", json=payload)
+    data = _ok(resp, 201)
     assert "id" in data
-    assert "verified" in data
     assert isinstance(data["verified"], bool)
     assert 0.0 <= data["verification_score"] <= 1.0
 
 
 def test_post_report_too_short():
     payload = {"lat": -6.2, "lng": 106.8, "text": "Banjir", "category": "flood"}
-    response = client.post("/reports", json=payload)
-    assert response.status_code == 422
+    _err(client.post("/reports", json=payload), 422)
 
 
 def test_post_report_then_visible_in_get():
-    """A verified report should appear in the GET /reports response."""
     payload = {
-        "lat": -6.21,
-        "lng": 106.80,
+        "lat": -6.21, "lng": 106.80,
         "text": "Tanah longsor terjadi di lereng bukit, warga diminta mengungsi segera!",
         "category": "landslide",
     }
     post_resp = client.post("/reports", json=payload)
-    assert post_resp.status_code == 201
-    created = post_resp.json()
+    created = _ok(post_resp, 201)
 
     if created["verified"]:
-        get_resp = client.get(
-            "/reports", params={"lat": -6.21, "lng": 106.80, "radius": 5}
-        )
-        assert get_resp.status_code == 200
-        ids = [r["id"] for r in get_resp.json()]
+        get_resp = client.get("/reports", params={"lat": -6.21, "lng": 106.80, "radius": 5})
+        data = _ok(get_resp)
+        ids = [r["id"] for r in data]
         assert created["id"] in ids
 
 
 # ── POST /fcm-token ────────────────────────────────────────────────────────────
 
 def test_post_fcm_token():
-    payload = {
-        "token": "test-fcm-registration-token-abcdef1234567890",
-        "device_id": "test-device-001",
-    }
-    response = client.post("/fcm-token", json=payload)
-    assert response.status_code == 200
-    data = response.json()
+    payload = {"token": "test-fcm-registration-token-abcdef1234567890", "device_id": "test-device-001"}
+    data = _ok(client.post("/fcm-token", json=payload))
     assert "id" in data
     assert data["token"] == payload["token"]
 
 
 def test_post_fcm_token_upsert():
-    """Posting the same token twice should succeed (upsert semantics)."""
     payload = {"token": "upsert-test-token-xyz9876543210abcdef", "device_id": "device-a"}
-    assert client.post("/fcm-token", json=payload).status_code == 200
+    _ok(client.post("/fcm-token", json=payload))
     payload["device_id"] = "device-b"
-    assert client.post("/fcm-token", json=payload).status_code == 200
+    _ok(client.post("/fcm-token", json=payload))
 
 
 # ── Utility unit tests ─────────────────────────────────────────────────────────

@@ -89,6 +89,37 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Process-Time"] = str(round(time.time() - start, 4))
     return response
 
+# ── Custom error handlers ──────────────────────────────────────────────────────
+from fastapi import Request as _Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_request: _Request, exc: RequestValidationError):
+    # Extract a readable message from the first validation error
+    errors = exc.errors()
+    if errors:
+        first = errors[0]
+        field = " → ".join(str(loc) for loc in first.get("loc", []))
+        msg = f"{field}: {first['msg']}" if field else first["msg"]
+    else:
+        msg = "Validation error"
+    return JSONResponse(
+        status_code=422,
+        content={"code": 422, "status": "Unprocessable Entity", "message": msg, "data": None},
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(_request: _Request, exc: Exception):
+    logger.exception("Unhandled exception: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"code": 500, "status": "Internal Server Error", "message": "Internal Server Error", "data": None},
+    )
+
+
 # ── Routers ────────────────────────────────────────────────────
 app.include_router(risk_router, tags=["Risk"])
 app.include_router(alerts_router, tags=["Alerts"])
@@ -99,4 +130,5 @@ app.include_router(fcm_router, tags=["Push Notifications"])
 
 @app.get("/health", tags=["Health"])
 async def health_check():
-    return {"status": "ok", "service": "pantau-bumi-api"}
+    return {"code": 200, "status": "Success", "message": None, "data": {"service": "pantau-bumi-api"}}
+

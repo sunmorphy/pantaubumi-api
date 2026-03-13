@@ -6,12 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.ai.risk_engine import compute_risk
 from app.schemas.risk import RiskResponse
+from app.schemas.response import APIResponse, ok
 from app.utils.cache import cache_get, cache_set
 
 router = APIRouter()
 
 
-@router.get("/risk", response_model=RiskResponse, summary="Get overall disaster risk for a location")
+@router.get(
+    "/risk",
+    response_model=APIResponse[RiskResponse],
+    summary="Get overall disaster risk for a location",
+)
 async def get_risk(
     lat: float = Query(..., description="Latitude", ge=-11.0, le=7.0),
     lng: float = Query(..., description="Longitude", ge=95.0, le=141.0),
@@ -32,7 +37,7 @@ async def get_risk(
 
     result = await compute_risk(lat, lng)
 
-    response = RiskResponse(
+    data = RiskResponse(
         lat=result.lat,
         lng=result.lng,
         flood_score=result.flood_score,
@@ -42,5 +47,6 @@ async def get_risk(
         computed_at=result.computed_at,
     )
 
-    cache_set(cache_key, response, ttl=120)  # Cache for 2 minutes
+    response = ok(data=data.model_dump(mode="json"))
+    cache_set(cache_key, response, ttl=120)
     return response

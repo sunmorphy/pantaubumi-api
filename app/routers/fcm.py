@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.fcm_token import FCMToken
 from app.schemas.fcm import FCMTokenCreate, FCMTokenResponse
+from app.schemas.response import APIResponse, ok
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -14,7 +15,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 @router.post(
     "/fcm-token",
-    response_model=FCMTokenResponse,
+    response_model=APIResponse[FCMTokenResponse],
     status_code=status.HTTP_200_OK,
     summary="Register or update a device FCM token for push notifications",
 )
@@ -30,17 +31,14 @@ async def register_fcm_token(
     - If the token already exists, its `device_id` is updated (upsert).
     - Tokens are used to send push notifications for high-severity alerts.
     """
-    # Check if token already exists
     result = await db.execute(
         select(FCMToken).where(FCMToken.token == payload.token)
     )
     token_row = result.scalar_one_or_none()
 
     if token_row:
-        # Update existing token
         token_row.device_id = payload.device_id
     else:
-        # Create new token record
         token_row = FCMToken(
             token=payload.token,
             device_id=payload.device_id,
@@ -49,4 +47,5 @@ async def register_fcm_token(
 
     await db.flush()
     await db.refresh(token_row)
-    return token_row
+
+    return ok(data=FCMTokenResponse.model_validate(token_row).model_dump(mode="json"))

@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select
@@ -9,12 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.report import Report
 from app.schemas.report import ReportCreate, ReportResponse
+from app.schemas.response import APIResponse, ok
 from app.ai.report_verifier import verify_report
 from app.utils.geo import haversine
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-
 
 DEFAULT_RADIUS_KM = 10.0
 MAX_REPORTS = 50
@@ -22,7 +22,7 @@ MAX_REPORTS = 50
 
 @router.get(
     "/reports",
-    response_model=List[ReportResponse],
+    response_model=APIResponse[List[ReportResponse]],
     summary="Get verified community reports near a location",
 )
 async def get_reports(
@@ -48,12 +48,12 @@ async def get_reports(
         if haversine(lat, lng, r.lat, r.lng) <= radius
     ][:MAX_REPORTS]
 
-    return nearby
+    return ok(data=[ReportResponse.model_validate(r).model_dump(mode="json") for r in nearby])
 
 
 @router.post(
     "/reports",
-    response_model=ReportResponse,
+    response_model=APIResponse[ReportResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Submit a new community disaster report",
 )
@@ -79,6 +79,7 @@ async def create_report(
         source="user",
     )
     db.add(report)
-    await db.flush()   # Get the auto-generated ID before commit
+    await db.flush()
     await db.refresh(report)
-    return report
+
+    return ok(data=ReportResponse.model_validate(report).model_dump(mode="json"), code=201)
