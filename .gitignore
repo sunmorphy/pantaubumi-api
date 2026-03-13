@@ -1,0 +1,31 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets and credentials — NEVER commit these
+.env
+firebase-credentials.json
+
+# AI model weights — generated at build time, not stored in git
+app/ai/weights/*.pkl
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Test & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log

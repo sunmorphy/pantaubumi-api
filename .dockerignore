@@ -1,0 +1,20 @@
+# Files and directories that should NEVER be sent to Docker build context
+.env
+.env.*
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+.git/
+.gitignore
+README.md
+API.md
+tests/
+*.md
+firebase-credentials.json

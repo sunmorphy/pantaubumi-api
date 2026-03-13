@@ -1,0 +1,13 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Railway injects $PORT automatically; gunicorn reads it via ${PORT:-8000}
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Minimum 512 MB RAM for ML model loading + asyncpg pool
+# Upgrade to 1 GB if enabling IndoBERT (INDOBERT_ENABLED=true)
