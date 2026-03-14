@@ -47,11 +47,89 @@ async def lifespan(app: FastAPI):
 
 _is_production = settings.app_env == "production"
 
+_DESCRIPTION = """
+## PantauBumi API 🌏
+
+Backend for the **PantauBumi** AI-Powered Multi-Disaster Early Warning System for Indonesia.
+
+### What it does
+- Pulls weather, seismic, and flood data from external APIs **every 5 minutes**
+- Runs the data through **XGBoost / Random Forest / rule-based** AI models
+- Serves risk scores, alerts, evacuation points, and community reports to the Android app
+
+### Response Envelope
+Every response — success or error — is wrapped in the same envelope:
+```json
+{ "code": 200, "status": "Success", "message": null, "data": { } }
+```
+
+### Rate Limits
+| Scope | Limit |
+|---|---|
+| Global (all endpoints) | 60 req / min / IP |
+| `POST /reports` | 10 req / min / IP |
+| `POST /fcm-token` | 20 req / min / IP |
+"""
+
+_TAGS_METADATA = [
+    {
+        "name": "Health",
+        "description": "Service liveness check. Use `/health` to verify the API is running before making other calls.",
+    },
+    {
+        "name": "Risk",
+        "description": (
+            "AI-computed disaster risk scores for a geographic coordinate. "
+            "Combines **Flood** (XGBoost), **Landslide** (Random Forest), and "
+            "**Earthquake** (rule-based) models into a single `overall_risk` label. "
+            "Results are cached per location for 2 minutes."
+        ),
+    },
+    {
+        "name": "Alerts",
+        "description": (
+            "Recent disaster alerts ingested from **BMKG**, **USGS**, and the internal risk engine. "
+            "Filtered by geographic radius and time window."
+        ),
+    },
+    {
+        "name": "Evacuation",
+        "description": (
+            "Nearest evacuation shelter points sorted by Haversine distance from the query coordinate. "
+            "Seed the `evacuation_points` table with your local shelter data before use."
+        ),
+    },
+    {
+        "name": "Reports",
+        "description": (
+            "Community-submitted disaster reports. Submissions are automatically classified by the "
+            "**IndoBERT NLP verifier** (keyword heuristic by default, full HuggingFace model optional). "
+            "Only `verified=true` reports are returned by `GET /reports`."
+        ),
+    },
+    {
+        "name": "Push Notifications",
+        "description": (
+            "Register Android device FCM tokens to receive push notifications when a "
+            "`high` or `critical` severity alert is triggered in the user's area."
+        ),
+    },
+]
+
 app = FastAPI(
     title="PantauBumi API",
-    description="AI-Powered Multi-Disaster Early Warning System for Indonesia",
-    version="0.1.0",
-    # Hide interactive docs in production — serve them via /docs only in dev
+    description=_DESCRIPTION,
+    version="1.0.0",
+    contact={
+        "name": "PantauBumi Team",
+        "url": "https://github.com/sunmorphy/pantaubumi-api",
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    openapi_tags=_TAGS_METADATA,
+    # Hide interactive docs in production
     docs_url=None if _is_production else "/docs",
     redoc_url=None if _is_production else "/redoc",
     openapi_url=None if _is_production else "/openapi.json",
