@@ -5,6 +5,7 @@ All responses are now wrapped in the standard envelope:
     {"code": int, "status": str, "message": str|null, "data": any}
 """
 
+import uuid
 import pytest
 from fastapi.testclient import TestClient
 
@@ -32,6 +33,11 @@ def _err(resp, code):
     assert body["data"] is None
     assert body["message"] is not None
     return body
+
+
+def _device_headers(device_id: str = None) -> dict:
+    """Return headers dict with a unique X-Device-ID."""
+    return {"X-Device-ID": device_id or str(uuid.uuid4())}
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
@@ -92,11 +98,14 @@ def test_post_report_flood():
         "text": "Banjir parah di depan rumah saya, air sudah setinggi lutut!",
         "category": "flood",
     }
-    resp = client.post("/reports", json=payload)
+    resp = client.post("/reports", json=payload, headers=_device_headers())
     data = _ok(resp, 201)
     assert "id" in data
     assert isinstance(data["verified"], bool)
     assert 0.0 <= data["verification_score"] <= 1.0
+    assert "flag_count" in data
+    # device_id must NOT be in the response
+    assert "device_id" not in data
 
 
 def test_post_report_too_short():
@@ -110,7 +119,7 @@ def test_post_report_then_visible_in_get():
         "text": "Tanah longsor terjadi di lereng bukit, warga diminta mengungsi segera!",
         "category": "landslide",
     }
-    post_resp = client.post("/reports", json=payload)
+    post_resp = client.post("/reports", json=payload, headers=_device_headers())
     created = _ok(post_resp, 201)
 
     if created["verified"]:
@@ -118,6 +127,87 @@ def test_post_report_then_visible_in_get():
         data = _ok(get_resp)
         ids = [r["id"] for r in data]
         assert created["id"] in ids
+
+
+# ── Device rate limiting ───────────────────────────────────────────────────────
+
+def test_device_cooldown_enforced():
+    """Same device ID cannot submit two reports within the cooldown window."""
+    device_id = str(uuid.uuid4())
+    headers = _device_headers(device_id)
+    payload = {
+        "lat": -6.3, "lng": 106.9,
+        "text": "Banjir parah melanda kawasan ini, jalan sudah tidak bisa dilalui!",
+        "category": "flood",
+    }
+
+    # First submission should succeed
+    r1 = client.post("/reports", json=payload, headers=headers)
+    assert r1.status_code == 201, r1.text
+
+    # Immediate second submission should be blocked by cooldown
+    r2 = client.post("/reports", json=payload, headers=headers)
+    assert r2.status_code == 429, r2.text
+    body = r2.json()
+    assert body["code"] == 429
+    assert "minute" in body["message"].lower()
+
+
+# ── Report flagging ────────────────────────────────────────────────────────────
+
+def _submit_report(text_suffix: str = "") -> int:
+    """Submit a new verified-looking report and return its ID."""
+    payload = {
+        "lat": -6.5, "lng": 107.2,
+        "text": f"Banjir besar dan parah di wilayah ini, air terus naik! {text_suffix}",
+        "category": "flood",
+    }
+    resp = client.post("/reports", json=payload, headers=_device_headers())
+    assert resp.status_code == 201, resp.text
+    return resp.json()["data"]["id"]
+
+
+def test_flag_report_once():
+    """Flag a report with one device — flag_count increases, report stays visible."""
+    report_id = _submit_report("flag_once")
+    resp = client.post(f"/reports/{report_id}/flag", headers=_device_headers())
+    data = _ok(resp)
+    assert data["report_id"] == report_id
+    assert data["flag_count"] == 1
+    assert data["hidden"] is False
+
+
+def test_flag_report_double_rejected():
+    """Same device cannot flag the same report twice (409)."""
+    report_id = _submit_report("double_flag")
+    headers = _device_headers()
+    client.post(f"/reports/{report_id}/flag", headers=headers)
+    resp = client.post(f"/reports/{report_id}/flag", headers=headers)
+    _err(resp, 409)
+
+
+def test_flag_report_auto_hide():
+    """Three unique devices flagging the same report hides it from GET /reports."""
+    report_id = _submit_report("auto_hide")
+
+    for _ in range(FLAG_HIDE_THRESHOLD := 3):
+        resp = client.post(f"/reports/{report_id}/flag", headers=_device_headers())
+        data = _ok(resp)
+
+    # Last flag response should indicate hidden
+    assert data["flag_count"] == FLAG_HIDE_THRESHOLD
+    assert data["hidden"] is True
+
+    # The report should no longer appear in GET /reports
+    list_resp = client.get("/reports", params={"lat": -6.5, "lng": 107.2, "radius": 50})
+    ids = [r["id"] for r in _ok(list_resp)]
+    assert report_id not in ids
+
+
+def test_flag_nonexistent_report():
+    """Flagging a report that doesn't exist returns 404."""
+    resp = client.post("/reports/999999/flag", headers=_device_headers())
+    _err(resp, 404)
 
 
 # ── POST /fcm-token ────────────────────────────────────────────────────────────

@@ -51,6 +51,9 @@ class ReportResponse(BaseModel):
     verified: bool
     verification_score: float
     source: str
+    flag_count: int = 0
+    # device_id is intentionally excluded — never expose who submitted a report
     created_at: datetime
 
     model_config = {"from_attributes": True}
+

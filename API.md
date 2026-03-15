@@ -8,7 +8,7 @@
 
 ## Authentication
 
-MVP: no authentication required. Rate limiting is enforced per IP address.
+MVP: no authentication required. Rate limiting is enforced per device ID and per IP address.
 
 ---
 
@@ -28,19 +28,36 @@ MVP: no authentication required. Rate limiting is enforced per IP address.
 | Field | Type | Description |
 |---|---|---|
 | `code` | int | HTTP status code |
-| `status` | string | Human-readable label (see table below) |
+| `status` | string | Human-readable label |
 | `message` | string \| null | Error detail or `null` on success |
 | `data` | object \| array \| null | Payload on success, `null` on error |
 
-**Status labels by code:**
+**Status labels:**
 
 | Code | Status |
 |---|---|
 | 200 | `Success` |
 | 201 | `Created` |
+| 404 | `Not Found` |
+| 409 | `Conflict` |
 | 422 | `Unprocessable Entity` |
 | 429 | `Too Many Requests` |
 | 500 | `Internal Server Error` |
+
+---
+
+## Anonymous Device Identity
+
+The Android app generates a UUID on first install and sends it silently on every report-related request. This gives the backend a stable, privacy-preserving device identity with zero login UI.
+
+```
+X-Device-ID: 550e8400-e29b-41d4-a716-446655440000
+```
+
+- Generated once with `UUID.randomUUID()` and persisted in `SharedPreferences`
+- **Never** returned in any API response
+- Used only for server-side rate limiting and cooldown enforcement
+- If omitted, IP-based limiting still applies
 
 ---
 
@@ -48,13 +65,20 @@ MVP: no authentication required. Rate limiting is enforced per IP address.
 
 | Endpoint | Limit |
 |---|---|
-| All endpoints (global) | 60 requests / minute / IP |
-| `POST /reports` | 10 requests / minute / IP |
-| `POST /fcm-token` | 20 requests / minute / IP |
+| All endpoints (global, per IP) | 60 req / min |
+| `POST /reports` (per device ID) | **5 reports / hour** |
+| `POST /reports` cooldown (per device ID) | **10-minute wait** between submissions |
+| `POST /reports/{id}/flag` | 30 req / min / IP |
+| `POST /fcm-token` | 20 req / min / IP |
 
-When exceeded → `429 Too Many Requests`:
+**429 response:**
 ```json
-{ "code": 429, "status": "Too Many Requests", "message": "...", "data": null }
+{
+  "code": 429,
+  "status": "Too Many Requests",
+  "message": "Please wait 8 minute(s) before submitting another report.",
+  "data": null
+}
 ```
 
 ---
@@ -105,24 +129,7 @@ AI-computed disaster risk scores for a coordinate.
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `flood_score` | float (0–1) | XGBoost flood probability |
-| `landslide_score` | float (0–1) | Random Forest landslide probability |
-| `earthquake_score` | float (0–1) | Normalised seismic risk |
-| `overall_risk` | string | `low` / `medium` / `high` / `critical` |
-
 **Overall risk thresholds:** ≥0.75 → `critical` · ≥0.50 → `high` · ≥0.25 → `medium` · else → `low`
-
-#### Error `422`
-```json
-{
-  "code": 422,
-  "status": "Unprocessable Entity",
-  "message": "query → lat: Input should be less than or equal to 7.0",
-  "data": null
-}
-```
 
 #### Example
 ```bash
@@ -163,8 +170,6 @@ Recent disaster alerts near a coordinate.
   ]
 }
 ```
-
-Returns at most 50 alerts, sorted newest first.
 
 #### Example
 ```bash
@@ -215,6 +220,8 @@ curl "http://localhost:8000/evacuation?lat=-6.2&lng=106.8&limit=3"
 ### `GET /reports`
 Verified community disaster reports within a radius.
 
+Only returns reports where **`verified=true` AND `visible=true`**. Reports auto-hidden by 3+ flags are excluded.
+
 #### Query Parameters
 
 | Parameter | Type | Required | Default |
@@ -239,6 +246,7 @@ Verified community disaster reports within a radius.
       "verified": true,
       "verification_score": 0.85,
       "source": "user",
+      "flag_count": 0,
       "created_at": "2026-03-14T03:40:00Z"
     }
   ]
@@ -253,9 +261,15 @@ curl "http://localhost:8000/reports?lat=-6.2&lng=106.8&radius=5"
 ---
 
 ### `POST /reports`
-Submit a community disaster report. Auto-verified by the NLP classifier.
+Submit a community disaster report. Auto-verified by NLP classifier.
 
-**Rate limit:** 10 requests / minute / IP
+**Headers:**
+
+| Header | Required | Description |
+|---|---|---|
+| `X-Device-ID` | Recommended | Anonymous device UUID for per-device rate limiting |
+
+**Rate limit:** 5 reports / hour / device · 10-minute cooldown between submissions
 
 #### Request Body
 ```json
@@ -289,26 +303,73 @@ Submit a community disaster report. Auto-verified by the NLP classifier.
     "verified": true,
     "verification_score": 0.85,
     "source": "user",
+    "flag_count": 0,
     "created_at": "2026-03-14T04:10:00Z"
   }
 }
 ```
 
-#### Error `422`
+> **Note:** `device_id` is intentionally excluded from the response to protect anonymity.
+
+#### Error `429` — Rate limit / cooldown
 ```json
-{
-  "code": 422,
-  "status": "Unprocessable Entity",
-  "message": "body → text: String should have at least 10 characters",
-  "data": null
-}
+{ "code": 429, "status": "Too Many Requests", "message": "Please wait 7 minute(s) before submitting another report.", "data": null }
 ```
 
 #### Example
 ```bash
 curl -X POST http://localhost:8000/reports \
   -H "Content-Type: application/json" \
-  -d '{"lat":-6.2,"lng":106.8,"text":"Tanah longsor di lereng bukit, ada rumah tertimbun!","category":"landslide"}'
+  -H "X-Device-ID: 550e8400-e29b-41d4-a716-446655440000" \
+  -d '{"lat":-6.2,"lng":106.8,"text":"Tanah longsor di lereng bukit, ada rumah yang tertimbun!","category":"landslide"}'
+```
+
+---
+
+### `POST /reports/{id}/flag`
+Flag a report as inaccurate or a hoax.
+
+**Headers:**
+
+| Header | Required | Description |
+|---|---|---|
+| `X-Device-ID` | Recommended | Prevents same device flagging twice |
+
+**Rate limit:** 30 req / min / IP
+
+#### Response `200`
+```json
+{
+  "code": 200,
+  "status": "Success",
+  "message": null,
+  "data": {
+    "report_id": 16,
+    "flag_count": 2,
+    "hidden": false
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `flag_count` | int | Total flags on this report |
+| `hidden` | bool | `true` if report was auto-hidden (≥3 flags) |
+
+#### Error `409` — Already flagged
+```json
+{ "code": 409, "status": "Conflict", "message": "You have already flagged this report.", "data": null }
+```
+
+#### Error `404` — Report not found
+```json
+{ "code": 404, "status": "Not Found", "message": "Report not found.", "data": null }
+```
+
+#### Example
+```bash
+curl -X POST http://localhost:8000/reports/16/flag \
+  -H "X-Device-ID: 550e8400-e29b-41d4-a716-446655440000"
 ```
 
 ---
@@ -316,7 +377,7 @@ curl -X POST http://localhost:8000/reports \
 ### `POST /fcm-token`
 Register or update a device FCM push notification token. Idempotent (upsert).
 
-**Rate limit:** 20 requests / minute / IP
+**Rate limit:** 20 req / min / IP
 
 #### Request Body
 ```json
@@ -325,11 +386,6 @@ Register or update a device FCM push notification token. Idempotent (upsert).
   "device_id": "android-device-uuid-1234"
 }
 ```
-
-| Field | Type | Required | Constraints |
-|---|---|---|---|
-| `token` | string | ✅ | min 10 chars |
-| `device_id` | string | ❌ | — |
 
 #### Response `200`
 ```json
@@ -354,6 +410,25 @@ curl -X POST http://localhost:8000/fcm-token \
 
 ---
 
+## Anti-Spam System
+
+```
+Submit report
+    ↓
+X-Device-ID present?
+    ↓ yes
+Cooldown check (< 10 min since last?) → 429
+    ↓ pass
+Hourly count check (≥ 5 in last 60 min?) → 429
+    ↓ pass
+IndoBERT NLP classification
+    ↓ verified=false → stored but never returned by GET /reports
+Community flags (POST /reports/{id}/flag)
+    ↓ flag_count ≥ 3 → visible=false → hidden from GET /reports
+```
+
+---
+
 ## Data Ingestion (Background Jobs)
 
 Runs every **5 minutes** via APScheduler:
@@ -371,29 +446,30 @@ Runs every **5 minutes** via APScheduler:
 
 | Model | Algorithm | Inputs | Output |
 |---|---|---|---|
-| Flood Risk | XGBoost | `rainfall_mm`, `river_level_m` | `flood_score` |
-| Landslide Risk | Random Forest | `rainfall_mm`, `soil_saturation` | `landslide_score` |
-| Earthquake Alert | Rule-based | `magnitude`, `distance_km` | `earthquake_score` |
+| Flood Risk | XGBoost | `rainfall_mm`, `river_level_m` | `flood_score` (0–1) |
+| Landslide Risk | Random Forest | `rainfall_mm`, `soil_saturation` | `landslide_score` (0–1) |
+| Earthquake Alert | Rule-based | `magnitude`, `distance_km` | `earthquake_score` (0–1) |
 | Report Verifier | Keyword heuristic* | Report text (Indonesian) | `verified`, `confidence` |
 
 \* Set `INDOBERT_ENABLED=true` for full HuggingFace `indobenchmark/indobert-base-p1` model.
 
 ---
 
-## Push Notification Payload (FCM)
+## Database Schema (Reports)
 
-Sent to registered devices on `high` / `critical` earthquake alerts:
-
-```json
-{
-  "title": "⚠️ Peringatan Gempa Bumi",
-  "body": "[USGS] Gempa kuat M6.2 terdeteksi sejauh 95 km. WASPADA TINGGI!",
-  "android": {
-    "priority": "high",
-    "notification": { "channel_id": "disaster_alerts", "sound": "default" }
-  }
-}
-```
+| Column | Type | Description |
+|---|---|---|
+| `id` | int PK | Auto-increment |
+| `lat`, `lng` | float | Incident coordinates |
+| `text` | text | Report text |
+| `category` | varchar | `flood` / `landslide` / `earthquake` / `fire` / `other` |
+| `verified` | bool | IndoBERT classification result |
+| `verification_score` | float | Classifier confidence (0–1) |
+| `source` | varchar | `"user"` or `"petabencana"` |
+| `device_id` | varchar(128) | Anonymous device UUID (never returned in responses) |
+| `flag_count` | int | Number of community flags |
+| `visible` | bool | `false` when `flag_count ≥ 3` |
+| `created_at` | timestamptz | Creation timestamp |
 
 ---
 

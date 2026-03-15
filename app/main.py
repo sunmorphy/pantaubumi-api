@@ -102,9 +102,15 @@ _TAGS_METADATA = [
     {
         "name": "Reports",
         "description": (
-            "Community-submitted disaster reports. Submissions are automatically classified by the "
-            "**IndoBERT NLP verifier** (keyword heuristic by default, full HuggingFace model optional). "
-            "Only `verified=true` reports are returned by `GET /reports`."
+            "Community-submitted disaster reports with built-in anti-spam protection.\n\n"
+            "**Anonymous device identity:** Send a stable UUID in the `X-Device-ID` header. "
+            "Generated once on app install — the user never sees it.\n\n"
+            "**Per-device limits (server-side):**\n"
+            "- Max **5 reports per hour** per device ID\n"
+            "- **10-minute cooldown** between consecutive submissions\n\n"
+            "**AI verification:** IndoBERT classifier filters spam before any report goes public. "
+            "Only `verified=true` **and** `visible=true` reports appear in `GET /reports`.\n\n"
+            "**Community flagging:** `POST /reports/{id}/flag` — 3 unique flags auto-hides a report."
         ),
     },
     {
@@ -189,6 +195,25 @@ async def validation_exception_handler(_request: _Request, exc: RequestValidatio
     )
 
 
+from fastapi import HTTPException as _HTTPException
+
+_STATUS_LABELS = {
+    400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
+    404: "Not Found", 409: "Conflict", 429: "Too Many Requests",
+    500: "Internal Server Error",
+}
+
+
+@app.exception_handler(_HTTPException)
+async def http_exception_handler(_request: _Request, exc: _HTTPException):
+    """Wrap all HTTPException raises in the standard response envelope."""
+    label = _STATUS_LABELS.get(exc.status_code, "Error")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"code": exc.status_code, "status": label, "message": exc.detail, "data": None},
+    )
+
+
 @app.exception_handler(Exception)
 async def generic_exception_handler(_request: _Request, exc: Exception):
     logger.exception("Unhandled exception: %s", exc)
@@ -196,6 +221,7 @@ async def generic_exception_handler(_request: _Request, exc: Exception):
         status_code=500,
         content={"code": 500, "status": "Internal Server Error", "message": "Internal Server Error", "data": None},
     )
+
 
 
 # ── Routers ────────────────────────────────────────────────────
