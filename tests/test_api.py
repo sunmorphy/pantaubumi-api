@@ -144,6 +144,18 @@ def test_get_reports_category_filter():
         assert report["category"] == "flood"
 
 
+def test_get_reports_limit():
+    """Test that the limit query param correctly restricts the number of results."""
+    resp = client.get("/reports", params={"lat": -6.2, "lng": 106.8, "limit": 2})
+    data = _ok(resp)
+    assert isinstance(data, list)
+    assert len(data) <= 2
+
+    # Test max limit constraint
+    resp_err = client.get("/reports", params={"lat": -6.2, "lng": 106.8, "limit": 101})
+    _err(resp_err, 422)
+
+
 # ── POST /reports ──────────────────────────────────────────────────────────────
 
 def test_post_report_flood():

@@ -296,6 +296,7 @@ Only returns reports where **`verified=true` AND `visible=true`**. Reports auto-
 | `lng` | float | ✅ | — | Longitude |
 | `radius` | float | ❌ | `10.0` (max 500) | Search radius in km |
 | `category` | string | ❌ | — | Filter by hazard (`flood`, `landslide`, etc.) |
+| `limit` | int | ❌ | `50` (max 100) | Max number of reports to return |
 
 #### Response `200`
 ```json

@@ -174,6 +174,7 @@ async def get_reports(
     lng: float = Query(..., description="Longitude"),
     radius: float = Query(default=DEFAULT_RADIUS_KM, description="Search radius in km", gt=0, le=500),
     category: Optional[str] = Query(default=None, description="Optional filter by hazard category (e.g., flood, landslide, earthquake)"),
+    limit: int = Query(default=50, description="Max number of reports to return", gt=0, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -186,7 +187,7 @@ async def get_reports(
     if category:
         query = query.where(Report.category == category)
         
-    query = query.order_by(Report.created_at.desc()).limit(MAX_REPORTS * 5)
+    query = query.order_by(Report.created_at.desc()).limit(limit * 5)
     
     result = await db.execute(query)
     all_reports = result.scalars().all()
@@ -194,7 +195,7 @@ async def get_reports(
     nearby = [
         r for r in all_reports
         if haversine(lat, lng, r.lat, r.lng) <= radius
-    ][:MAX_REPORTS]
+    ][:limit]
 
     return ok(data=[ReportResponse.model_validate(r).model_dump(mode="json") for r in nearby])
 
