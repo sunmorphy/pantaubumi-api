@@ -68,10 +68,24 @@ def test_get_risk_out_of_bounds():
 
 # ── GET /alerts ────────────────────────────────────────────────────────────────
 
-def test_get_alerts_returns_list():
+def test_get_alerts_returns_paginated_response():
     resp = client.get("/alerts", params={"lat": -6.2, "lng": 106.8})
     data = _ok(resp)
-    assert isinstance(data, list)
+    # Response shape: {items: [...], next_cursor: int|null, has_more: bool}
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "next_cursor" in data
+    assert "has_more" in data
+    assert isinstance(data["items"], list)
+    assert isinstance(data["has_more"], bool)
+    assert data["next_cursor"] is None or isinstance(data["next_cursor"], int)
+
+
+def test_get_alerts_pagination_cursor():
+    """Passing before_id should filter results — returns 200 with valid envelope."""
+    resp = client.get("/alerts", params={"lat": -6.2, "lng": 106.8, "limit": 1, "before_id": 999999})
+    data = _ok(resp)
+    assert isinstance(data["items"], list)
 
 
 # ── GET /evacuation ────────────────────────────────────────────────────────────

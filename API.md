@@ -139,16 +139,18 @@ curl "http://localhost:8000/risk?lat=-6.2&lng=106.8"
 ---
 
 ### `GET /alerts`
-Recent disaster alerts near a coordinate.
+Recent disaster alerts near a coordinate. **Cursor-paginated.**
 
 #### Query Parameters
 
-| Parameter | Type | Required | Default |
-|---|---|---|---|
-| `lat` | float | ✅ | — |
-| `lng` | float | ✅ | — |
-| `radius_km` | float | ❌ | `100.0` |
-| `hours` | int | ❌ | `24` (max 168) |
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `lat` | float | ✅ | — | Latitude |
+| `lng` | float | ✅ | — | Longitude |
+| `radius_km` | float | ❌ | `100.0` | Search radius in km |
+| `hours` | int | ❌ | `24` (max 168) | Look-back window |
+| `limit` | int | ❌ | `20` (max 50) | Results per page |
+| `before_id` | int | ❌ | — | Cursor — pass `next_cursor` from previous response |
 
 #### Response `200`
 ```json
@@ -156,25 +158,48 @@ Recent disaster alerts near a coordinate.
   "code": 200,
   "status": "Success",
   "message": null,
-  "data": [
-    {
-      "id": 42,
-      "type": "earthquake",
-      "lat": -6.5,
-      "lng": 107.1,
-      "severity": "high",
-      "message": "[USGS] Gempa signifikan M5.2 sejauh 85 km. Bersiaplah.",
-      "source": "usgs",
-      "created_at": "2026-03-14T03:55:00Z"
-    }
-  ]
+  "data": {
+    "items": [
+      {
+        "id": 42,
+        "type": "earthquake",
+        "lat": -6.5,
+        "lng": 107.1,
+        "severity": "high",
+        "message": "[USGS] Gempa signifikan M5.2 sejauh 85 km. Bersiaplah.",
+        "source": "usgs",
+        "created_at": "2026-03-14T03:55:00Z"
+      }
+    ],
+    "next_cursor": 37,
+    "has_more": true
+  }
 }
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `items` | array | Alerts for this page |
+| `next_cursor` | int \| null | Pass as `before_id` to get the next page. `null` on last page |
+| `has_more` | bool | `false` when you've reached the end |
+
+#### How to paginate
+```
+Page 1: GET /alerts?lat=-6.2&lng=106.8&limit=20
+          → next_cursor: 37, has_more: true
+
+Page 2: GET /alerts?lat=-6.2&lng=106.8&limit=20&before_id=37
+          → next_cursor: 12, has_more: true
+
+Page 3: GET /alerts?lat=-6.2&lng=106.8&limit=20&before_id=12
+          → next_cursor: null, has_more: false  ← done
 ```
 
 #### Example
 ```bash
-curl "http://localhost:8000/alerts?lat=-6.2&lng=106.8&radius_km=50&hours=6"
+curl "http://localhost:8000/alerts?lat=-6.2&lng=106.8&radius_km=50&hours=6&limit=20"
 ```
+
 
 ---
 
