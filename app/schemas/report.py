@@ -1,3 +1,4 @@
+from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -51,6 +52,7 @@ class ReportResponse(BaseModel):
     verified: bool
     verification_score: float
     source: str
+    image_url: Optional[str] = None
     flag_count: int = 0
     # device_id is intentionally excluded — never expose who submitted a report
     created_at: datetime

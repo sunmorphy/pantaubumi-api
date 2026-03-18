@@ -84,6 +84,13 @@ class Settings(BaseSettings):
     firebase_credentials_path: str = "firebase-credentials.json"
     firebase_credentials_json: str = ""  # Alternative: inline JSON string
 
+    # ── Cloudflare R2 Storage ────────────────────────────────────
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket_name: str = ""
+    r2_public_url: str = ""  # e.g., "https://pub-xxxx.r2.dev"
+
     # ── Scheduler ────────────────────────────────────────────────
     ingestion_interval_minutes: int = 5
 

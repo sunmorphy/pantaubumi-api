@@ -339,15 +339,9 @@ Submit a community disaster report. Auto-verified by NLP classifier.
 
 **Rate limit:** 5 reports / hour / device · 10-minute cooldown between submissions
 
-#### Request Body
-```json
-{
-  "lat": -6.2,
-  "lng": 106.8,
-  "text": "Banjir besar melanda kampung kami, air sudah setinggi dada!",
-  "category": "flood"
-}
-```
+#### Request Payload (`multipart/form-data`)
+
+Unlike other endpoints, `POST /reports` accepts **`multipart/form-data`** to support optional photo uploads.
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
@@ -355,6 +349,7 @@ Submit a community disaster report. Auto-verified by NLP classifier.
 | `lng` | float | Yes | — |
 | `text` | string | Yes | 10–2000 chars |
 | `category` | string | No | default `"other"` |
+| `image` | binary file | No | JPEG/PNG/WebP format |
 
 #### Response `201`
 ```json
@@ -368,6 +363,7 @@ Submit a community disaster report. Auto-verified by NLP classifier.
     "lng": 106.8,
     "text": "Banjir besar melanda kampung kami, air sudah setinggi dada!",
     "category": "flood",
+    "image_url": "https://pub-xxxx.r2.dev/reports/1234_abcd.jpg",
     "verified": true,
     "verification_score": 0.85,
     "source": "user",
@@ -387,9 +383,12 @@ Submit a community disaster report. Auto-verified by NLP classifier.
 #### Example
 ```bash
 curl -X POST http://localhost:8000/reports \
-  -H "Content-Type: application/json" \
   -H "X-Device-ID: 550e8400-e29b-41d4-a716-446655440000" \
-  -d '{"lat":-6.2,"lng":106.8,"text":"Tanah longsor di lereng bukit, ada rumah yang tertimbun!","category":"landslide"}'
+  -F 'lat=-6.2' \
+  -F 'lng=106.8' \
+  -F 'text=Tanah longsor di lereng bukit!' \
+  -F 'category=landslide' \
+  -F 'image=@/path/to/photo.jpg'
 ```
 
 ---
@@ -564,6 +563,7 @@ Runs every **5 minutes** via APScheduler:
 | `lat`, `lng` | float | Incident coordinates |
 | `text` | text | Report text |
 | `category` | varchar | `flood` / `landslide` / `earthquake` / `fire` / `other` |
+| `image_url` | varchar | Public URL of the uploaded image (from Cloudflare R2) |
 | `verified` | bool | IndoBERT classification result |
 | `verification_score` | float | Classifier confidence (0–1) |
 | `source` | varchar | `"user"` or `"petabencana"` |

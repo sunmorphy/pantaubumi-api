@@ -39,7 +39,11 @@ def _get_firebase_app():
             )
             return None
 
-        _app = firebase_admin.initialize_app(cred)
+        app_options = {}
+        if settings.firebase_storage_bucket:
+            app_options["storageBucket"] = settings.firebase_storage_bucket
+
+        _app = firebase_admin.initialize_app(cred, options=app_options)
         logger.info("Firebase Admin SDK initialized.")
         return _app
 

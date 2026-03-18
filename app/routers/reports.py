@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status, Form, UploadFile, File
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select, func
@@ -212,7 +212,11 @@ async def get_reports(
 @limiter.limit("10/minute")
 async def create_report(
     request: Request,
-    payload: ReportCreate,
+    lat: float = Form(..., description="Latitude of the incident"),
+    lng: float = Form(..., description="Longitude of the incident"),
+    text: str = Form(..., min_length=10, max_length=2000, description="Incident description"),
+    category: str = Form("other", description="Incident category hint"),
+    image: Optional[UploadFile] = File(None, description="Optional photo of the incident"),
     db: AsyncSession = Depends(get_db),
     device_id: str = Depends(_get_device_id),
 ):
@@ -272,23 +276,33 @@ async def create_report(
             )
 
     # ── AI classification ──────────────────────────────────────────────────────
-    verification = verify_report(payload.text)
+    verification = verify_report(text)
 
-    report = Report(
-        lat=payload.lat,
-        lng=payload.lng,
-        text=payload.text,
-        category=verification.category if verification.category != "other" else payload.category,
+    final_category = verification.category if verification.category != "other" else category
+
+    # ── Cloudflare R2 Image Upload ──
+    image_url = None
+    if image:
+        from app.services.storage import upload_image_to_storage
+        file_bytes = await image.read()
+        image_url = await upload_image_to_storage(file_bytes, image.filename, image.content_type)
+
+    report_db = Report(
+        lat=lat,
+        lng=lng,
+        text=text,
+        category=final_category,
+        image_url=image_url if image_url else None,
         verified=verification.is_valid,
         verification_score=verification.confidence,
-        source="user",
         device_id=device_id,
+        source="user",
     )
-    db.add(report)
+    db.add(report_db)
     await db.flush()
-    await db.refresh(report)
+    await db.refresh(report_db)
 
-    return ok(data=ReportResponse.model_validate(report).model_dump(mode="json"), code=201)
+    return ok(data=ReportResponse.model_validate(report_db).model_dump(mode="json"), code=201)
 
 
 # ── POST /reports/{id}/flag ────────────────────────────────────────────────────

@@ -19,6 +19,9 @@ class Report(Base):
     # e.g. "flood", "landslide", "earthquake", "fire", "other"
     category: Mapped[str] = mapped_column(String(50), default="other")
 
+    # Optional image uploaded to Firebase Storage
+    image_url: Mapped[str] = mapped_column(String(500), nullable=True)
+
     # IndoBERT verification output
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
     verification_score: Mapped[float] = mapped_column(Float, default=0.0)

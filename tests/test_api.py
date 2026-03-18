@@ -164,7 +164,7 @@ def test_post_report_flood():
         "text": "Banjir parah di depan rumah saya, air sudah setinggi lutut!",
         "category": "flood",
     }
-    resp = client.post("/reports", json=payload, headers=_device_headers())
+    resp = client.post("/reports", data=payload, headers=_device_headers())
     data = _ok(resp, 201)
     assert "id" in data
     assert isinstance(data["verified"], bool)
@@ -176,7 +176,27 @@ def test_post_report_flood():
 
 def test_post_report_too_short():
     payload = {"lat": -6.2, "lng": 106.8, "text": "Banjir", "category": "flood"}
-    _err(client.post("/reports", json=payload), 422)
+    _err(client.post("/reports", data=payload), 422)
+
+
+from unittest.mock import AsyncMock, patch
+
+@patch("app.services.storage.upload_image_to_storage", new_callable=AsyncMock)
+def test_post_report_with_image(mock_upload):
+    mock_upload.return_value = "https://example.com/mock_image.jpg"
+    
+    payload = {
+        "lat": -6.2, "lng": 106.8,
+        "text": "Banjir parah di depan rumah saya, air sudah setinggi lutut!",
+        "category": "flood",
+    }
+    files = {"image": ("photo.jpg", b"fake-image-bytes", "image/jpeg")}
+    
+    resp = client.post("/reports", data=payload, files=files, headers=_device_headers())
+    data = _ok(resp, 201)
+    
+    assert data["image_url"] == "https://example.com/mock_image.jpg"
+    mock_upload.assert_called_once()
 
 
 def test_post_report_then_visible_in_get():
@@ -185,7 +205,7 @@ def test_post_report_then_visible_in_get():
         "text": "Tanah longsor terjadi di lereng bukit, warga diminta mengungsi segera!",
         "category": "landslide",
     }
-    post_resp = client.post("/reports", json=payload, headers=_device_headers())
+    post_resp = client.post("/reports", data=payload, headers=_device_headers())
     created = _ok(post_resp, 201)
 
     if created["verified"]:
@@ -224,11 +244,11 @@ def test_device_cooldown_enforced():
     }
 
     # First submission should succeed
-    r1 = client.post("/reports", json=payload, headers=headers)
+    r1 = client.post("/reports", data=payload, headers=headers)
     assert r1.status_code == 201, r1.text
 
     # Immediate second submission should be blocked by cooldown
-    r2 = client.post("/reports", json=payload, headers=headers)
+    r2 = client.post("/reports", data=payload, headers=headers)
     assert r2.status_code == 429, r2.text
     body = r2.json()
     assert body["code"] == 429
@@ -244,7 +264,7 @@ def _submit_report(text_suffix: str = "") -> int:
         "text": f"Banjir besar dan parah di wilayah ini, air terus naik! {text_suffix}",
         "category": "flood",
     }
-    resp = client.post("/reports", json=payload, headers=_device_headers())
+    resp = client.post("/reports", data=payload, headers=_device_headers())
     assert resp.status_code == 201, resp.text
     return resp.json()["data"]["id"]
 
@@ -296,7 +316,7 @@ def test_flag_nonexistent_report():
 
 def test_post_fcm_token():
     payload = {"token": "test-fcm-token-1", "device_id": "test-device-1"}
-    resp = client.post("/fcm-token", json=payload)
+    resp = client.post("/fcm-token", data=payload)
     data = _ok(resp)
     assert data["token"] == "test-fcm-token-1"
     assert data["device_id"] == "test-device-1"
