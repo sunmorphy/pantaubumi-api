@@ -121,7 +121,7 @@ async def _send_push_for_quake(alert: Alert, db: AsyncSession) -> None:
         if tokens:
             await broadcast_notification(
                 tokens=tokens,
-                title="⚠️ Peringatan Gempa Bumi",
+                title="Peringatan Gempa Bumi",
                 body=alert.message,
             )
             logger.info("Push notification sent to %d devices", len(tokens))

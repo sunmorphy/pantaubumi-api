@@ -108,8 +108,8 @@ Current weather and seismic readings for a coordinate, served from an in-memory 
 
 | Parameter | Type | Required | Constraints |
 |---|---|---|---|
-| `lat` | float | ✅ | -11.0 ≤ lat ≤ 7.0 |
-| `lng` | float | ✅ | 95.0 ≤ lng ≤ 141.0 |
+| `lat` | float | Yes | -11.0 ≤ lat ≤ 7.0 |
+| `lng` | float | Yes | 95.0 ≤ lng ≤ 141.0 |
 
 #### Response `200`
 ```json
@@ -149,8 +149,8 @@ AI-computed disaster risk scores for a coordinate.
 
 | Parameter | Type | Required | Constraints |
 |---|---|---|---|
-| `lat` | float | ✅ | -11.0 ≤ lat ≤ 7.0 |
-| `lng` | float | ✅ | 95.0 ≤ lng ≤ 141.0 |
+| `lat` | float | Yes | -11.0 ≤ lat ≤ 7.0 |
+| `lng` | float | Yes | 95.0 ≤ lng ≤ 141.0 |
 
 #### Response `200`
 ```json
@@ -186,12 +186,12 @@ Recent disaster alerts near a coordinate. **Cursor-paginated.**
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `lat` | float | ✅ | — | Latitude |
-| `lng` | float | ✅ | — | Longitude |
-| `radius_km` | float | ❌ | `100.0` | Search radius in km |
-| `hours` | int | ❌ | `24` (max 168) | Look-back window |
-| `limit` | int | ❌ | `20` (max 50) | Results per page |
-| `before_id` | int | ❌ | — | Cursor — pass `next_cursor` from previous response |
+| `lat` | float | Yes | — | Latitude |
+| `lng` | float | Yes | — | Longitude |
+| `radius_km` | float | No | `100.0` | Search radius in km |
+| `hours` | int | No | `24` (max 168) | Look-back window |
+| `limit` | int | No | `20` (max 50) | Results per page |
+| `before_id` | int | No | — | Cursor — pass `next_cursor` from previous response |
 
 #### Response `200`
 ```json
@@ -251,9 +251,9 @@ Nearest evacuation shelters sorted by distance.
 
 | Parameter | Type | Required | Default |
 |---|---|---|---|
-| `lat` | float | ✅ | — |
-| `lng` | float | ✅ | — |
-| `limit` | int | ❌ | `5` (max 10) |
+| `lat` | float | Yes | — |
+| `lng` | float | Yes | — |
+| `limit` | int | No | `5` (max 10) |
 
 #### Response `200`
 ```json
@@ -292,11 +292,11 @@ Only returns reports where **`verified=true` AND `visible=true`**. Reports auto-
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `lat` | float | ✅ | — | Latitude |
-| `lng` | float | ✅ | — | Longitude |
-| `radius` | float | ❌ | `10.0` (max 500) | Search radius in km |
-| `category` | string | ❌ | — | Filter by hazard (`flood`, `landslide`, etc.) |
-| `limit` | int | ❌ | `50` (max 100) | Max number of reports to return |
+| `lat` | float | Yes | — | Latitude |
+| `lng` | float | Yes | — | Longitude |
+| `radius` | float | No | `10.0` (max 500) | Search radius in km |
+| `category` | string | No | — | Filter by hazard (`flood`, `landslide`, etc.) |
+| `limit` | int | No | `50` (max 100) | Max number of reports to return |
 
 #### Response `200`
 ```json
@@ -351,10 +351,10 @@ Submit a community disaster report. Auto-verified by NLP classifier.
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `lat` | float | ✅ | — |
-| `lng` | float | ✅ | — |
-| `text` | string | ✅ | 10–2000 chars |
-| `category` | string | ❌ | default `"other"` |
+| `lat` | float | Yes | — |
+| `lng` | float | Yes | — |
+| `text` | string | Yes | 10–2000 chars |
+| `category` | string | No | default `"other"` |
 
 #### Response `201`
 ```json
@@ -487,7 +487,7 @@ Unregister a device FCM token so it no longer receives push notifications.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `token` | string | ✅ | The FCM token to delete |
+| `token` | string | Yes | The FCM token to delete |
 
 #### Response `200`
 ```json
@@ -589,11 +589,11 @@ INSERT INTO evacuation_points (name, lat, lng, capacity, type, address) VALUES
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `DATABASE_URL` | ✅ | — | PostgreSQL URL (auto-normalised to asyncpg) |
-| `APP_ENV` | ❌ | `development` | `production` hides `/docs`, enforces HSTS |
-| `SECRET_KEY` | ✅ in prod | `change-me` | Must be changed in production |
-| `CORS_ORIGINS` | ❌ | `*` | Comma-separated allowed origins |
-| `FIREBASE_CREDENTIALS_PATH` | ⚠️ | `firebase-credentials.json` | Path to service account JSON |
-| `FIREBASE_CREDENTIALS_JSON` | ⚠️ | — | Inline JSON (for Railway env vars) |
-| `INGESTION_INTERVAL_MINUTES` | ❌ | `5` | Background job frequency |
-| `INDOBERT_ENABLED` | ❌ | `false` | Use full HuggingFace IndoBERT model |
+| `DATABASE_URL` | Yes | — | PostgreSQL URL (auto-normalised to asyncpg) |
+| `APP_ENV` | No | `development` | `production` hides `/docs`, enforces HSTS |
+| `SECRET_KEY` | Yes in prod | `change-me` | Must be changed in production |
+| `CORS_ORIGINS` | No | `*` | Comma-separated allowed origins |
+| `FIREBASE_CREDENTIALS_PATH` | Warning | `firebase-credentials.json` | Path to service account JSON |
+| `FIREBASE_CREDENTIALS_JSON` | Warning | — | Inline JSON (for Railway env vars) |
+| `INGESTION_INTERVAL_MINUTES` | No | `5` | Background job frequency |
+| `INDOBERT_ENABLED` | No | `false` | Use full HuggingFace IndoBERT model |

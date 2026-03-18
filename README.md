@@ -1,4 +1,4 @@
-# PantauBumi API 🌍⚠️
+# PantauBumi API
 
 AI-Powered Multi-Disaster Early Warning System for Indonesia.
 
