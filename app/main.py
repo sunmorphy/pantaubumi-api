@@ -16,6 +16,7 @@ from app.routers.alerts import router as alerts_router
 from app.routers.evacuation import router as evacuation_router
 from app.routers.reports import router as reports_router
 from app.routers.fcm import router as fcm_router
+from app.routers.weather import router as weather_router
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -230,6 +231,7 @@ app.include_router(alerts_router, tags=["Alerts"])
 app.include_router(evacuation_router, tags=["Evacuation"])
 app.include_router(reports_router, tags=["Reports"])
 app.include_router(fcm_router, tags=["Push Notifications"])
+app.include_router(weather_router, tags=["Weather"])
 
 
 @app.get("/health", tags=["Health"])

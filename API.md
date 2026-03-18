@@ -101,6 +101,47 @@ X-Device-ID: 550e8400-e29b-41d4-a716-446655440000
 
 ---
 
+### `GET /weather`
+Current weather and seismic readings for a coordinate, served from an in-memory cache (refreshed every 5 mins).
+
+#### Query Parameters
+
+| Parameter | Type | Required | Constraints |
+|---|---|---|---|
+| `lat` | float | ✅ | -11.0 ≤ lat ≤ 7.0 |
+| `lng` | float | ✅ | 95.0 ≤ lng ≤ 141.0 |
+
+#### Response `200`
+```json
+{
+  "code": 200,
+  "status": "Success",
+  "message": null,
+  "data": {
+    "rainfall_mm_per_hour": 82.0,
+    "river_level_m": 3.4,
+    "river_level_delta_per_hour": 0.8,
+    "latest_magnitude": null,
+    "recorded_at": "2026-03-18T09:00:00Z"
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `rainfall_mm_per_hour` | float | Open-Meteo hourly precipitation forecast |
+| `river_level_m` | float | Proxy estimation based on rainfall and soil moisture |
+| `river_level_delta_per_hour` | float | Change since last reading (positive = rising) |
+| `latest_magnitude` | float \| null | Magnitude of most recent USGS earthquake nearby, or `null` |
+| `recorded_at` | string | ISO timestamp of the last ingestion sync |
+
+#### Example
+```bash
+curl "http://localhost:8000/weather?lat=-6.2&lng=106.8"
+```
+
+---
+
 ### `GET /risk`
 AI-computed disaster risk scores for a coordinate.
 
@@ -249,11 +290,12 @@ Only returns reports where **`verified=true` AND `visible=true`**. Reports auto-
 
 #### Query Parameters
 
-| Parameter | Type | Required | Default |
-|---|---|---|---|
-| `lat` | float | ✅ | — |
-| `lng` | float | ✅ | — |
-| `radius` | float | ❌ | `10.0` (max 500) |
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `lat` | float | ✅ | — | Latitude |
+| `lng` | float | ✅ | — | Longitude |
+| `radius` | float | ❌ | `10.0` (max 500) | Search radius in km |
+| `category` | string | ❌ | — | Filter by hazard (`flood`, `landslide`, etc.) |
 
 #### Response `200`
 ```json
@@ -431,6 +473,39 @@ Register or update a device FCM push notification token. Idempotent (upsert).
 curl -X POST http://localhost:8000/fcm-token \
   -H "Content-Type: application/json" \
   -d '{"token":"eNGvgqk5T6q:APA91bHPRgkFjJiNvmMqLwV...","device_id":"android-device-uuid-1234"}'
+```
+
+---
+
+### `DELETE /fcm-token`
+Unregister a device FCM token so it no longer receives push notifications.
+
+**Rate limit:** 20 req / min / IP
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `token` | string | ✅ | The FCM token to delete |
+
+#### Response `200`
+```json
+{
+  "code": 200,
+  "status": "Success",
+  "message": "Token deleted successfully",
+  "data": null
+}
+```
+
+#### Error `404` — Token not found
+```json
+{ "code": 404, "status": "Not Found", "message": "Token not found", "data": null }
+```
+
+#### Example
+```bash
+curl -X DELETE "http://localhost:8000/fcm-token?token=eNGvgqk5T6q:APA91..."
 ```
 
 ---

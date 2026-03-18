@@ -61,6 +61,36 @@ def test_get_risk():
 
 
 def test_get_risk_out_of_bounds():
+    # Bounds: lat (-11, 7), lng (95, 141)
+    # This should fail validation
+    _err(client.get("/risk", params={"lat": 10.0, "lng": 106.8}), 422)
+    _err(client.get("/risk", params={"lat": -6.2, "lng": 150.0}), 422)
+
+
+def test_get_risk_zones():
+    resp = client.get(
+        "/risk/zones",
+        params={
+            "min_lat": -6.3,
+            "max_lat": -6.1,
+            "min_lng": 106.7,
+            "max_lng": 106.9,
+        },
+    )
+    data = _ok(resp)
+    assert isinstance(data, list)
+    assert len(data) == 9  # 3x3 grid
+    
+    # Check that individual points have expected keys
+    first = data[0]
+    assert "flood_score" in first
+    assert "landslide_score" in first
+    assert "earthquake_score" in first
+    assert first["overall_risk"] in ("low", "medium", "high", "critical")
+
+
+
+def test_get_risk_out_of_bounds():
     resp = client.get("/risk", params={"lat": 50.0, "lng": 106.8})
     body = _err(resp, 422)
     assert "lat" in body["message"].lower() or "latitude" in body["message"].lower()
@@ -104,6 +134,16 @@ def test_get_reports_returns_list():
     assert isinstance(data, list)
 
 
+def test_get_reports_category_filter():
+    """Test that the category query param correctly filters results."""
+    # Note: we assume the test DB has random records, so we just test the param is accepted
+    resp = client.get("/reports", params={"lat": -6.2, "lng": 106.8, "radius": 10, "category": "flood"})
+    data = _ok(resp)
+    assert isinstance(data, list)
+    for report in data:
+        assert report["category"] == "flood"
+
+
 # ── POST /reports ──────────────────────────────────────────────────────────────
 
 def test_post_report_flood():
@@ -141,6 +181,22 @@ def test_post_report_then_visible_in_get():
         data = _ok(get_resp)
         ids = [r["id"] for r in data]
         assert created["id"] in ids
+
+
+# ── GET /weather ───────────────────────────────────────────────────────────────
+
+def test_get_weather():
+    resp = client.get("/weather", params={"lat": -6.2, "lng": 106.8})
+    data = _ok(resp)
+    assert "rainfall_mm_per_hour" in data
+    assert "river_level_m" in data
+    assert "river_level_delta_per_hour" in data
+    assert "latest_magnitude" in data
+    assert "recorded_at" in data
+    assert isinstance(data["rainfall_mm_per_hour"], float)
+    assert isinstance(data["river_level_m"], float)
+    assert isinstance(data["river_level_delta_per_hour"], float)
+    assert data["latest_magnitude"] is None or isinstance(data["latest_magnitude"], float)
 
 
 # ── Device rate limiting ───────────────────────────────────────────────────────
@@ -222,6 +278,38 @@ def test_flag_nonexistent_report():
     """Flagging a report that doesn't exist returns 404."""
     resp = client.post("/reports/999999/flag", headers=_device_headers())
     _err(resp, 404)
+
+
+# ── FCM Token ──────────────────────────────────────────────────────────────────
+
+def test_post_fcm_token():
+    payload = {"token": "test-fcm-token-1", "device_id": "test-device-1"}
+    resp = client.post("/fcm-token", json=payload)
+    data = _ok(resp)
+    assert data["token"] == "test-fcm-token-1"
+    assert data["device_id"] == "test-device-1"
+
+def test_post_fcm_token_upsert():
+    # Update same token with new device ID
+    payload = {"token": "test-fcm-token-1", "device_id": "test-device-2"}
+    resp = client.post("/fcm-token", json=payload)
+    data = _ok(resp)
+    assert data["token"] == "test-fcm-token-1"
+    assert data["device_id"] == "test-device-2"
+
+def test_delete_fcm_token():
+    # First, let's create a token specifically for deletion testing
+    payload = {"token": "test-fcm-token-to-delete", "device_id": "test-device-del"}
+    client.post("/fcm-token", json=payload)
+
+    # Now, let's delete it
+    resp = client.delete("/fcm-token", params={"token": "test-fcm-token-to-delete"})
+    _ok(resp)
+
+    # Let's try to delete it again to ensure 404
+    resp = client.delete("/fcm-token", params={"token": "test-fcm-token-to-delete"})
+    _err(resp, 404)
+
 
 
 # ── POST /fcm-token ────────────────────────────────────────────────────────────

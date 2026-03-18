@@ -35,17 +35,34 @@ def _is_fresh(key: str) -> bool:
 # ── Weather ───────────────────────────────────────────────────────────────────
 
 def set_cached_weather(lat: float, lng: float, data: dict) -> None:
+    from datetime import datetime, timezone as _tz
     key = _grid_key(lat, lng, "wx")
-    _weather_store[key] = data
+    # Compute river level delta from the previous reading
+    prev = _weather_store.get(key, {})
+    prev_level = float(prev.get("river_level_m", data.get("river_level_m", 1.0)))
+    curr_level = float(data.get("river_level_m", 1.0))
+    delta = curr_level - prev_level
+    _weather_store[key] = {
+        **data,
+        "river_level_delta_per_hour": delta,
+        "recorded_at": datetime.now(tz=_tz.utc).isoformat(),
+    }
     _timestamps[key] = time.time()
 
 
 def get_cached_weather(lat: float, lng: float) -> dict:
+    from datetime import datetime, timezone as _tz
     key = _grid_key(lat, lng, "wx")
     if _is_fresh(key):
         return _weather_store[key]
     # Return neutral defaults when no fresh data is available
-    return {"rainfall_mm": 0.0, "river_level_m": 1.0, "soil_saturation": 0.3}
+    return {
+        "rainfall_mm": 0.0,
+        "river_level_m": 1.0,
+        "soil_saturation": 0.3,
+        "river_level_delta_per_hour": 0.0,
+        "recorded_at": datetime.now(tz=_tz.utc).isoformat(),
+    }
 
 
 # ── Seismic ───────────────────────────────────────────────────────────────────
@@ -77,5 +94,5 @@ def cache_get(key: str) -> Optional[Any]:
         value, expiry = _generic_store[key]
         if time.time() < expiry:
             return value
-        del _generic_store[key]
+        _generic_store.pop(key, None)
     return None

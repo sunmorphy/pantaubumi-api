@@ -87,3 +87,66 @@ async def register_fcm_token(
     await db.refresh(token_row)
 
     return ok(data=FCMTokenResponse.model_validate(token_row).model_dump(mode="json"))
+
+
+# ── DELETE /fcm-token ──────────────────────────────────────────────────────────
+
+_DELETE_RESPONSE_200 = {
+    "content": {
+        "application/json": {
+            "example": {
+                "code": 200,
+                "status": "Success",
+                "message": "Token deleted successfully",
+                "data": None,
+            }
+        }
+    }
+}
+
+_DELETE_RESPONSE_404 = {
+    "description": "Token Not Found",
+    "content": {
+        "application/json": {
+            "example": {
+                "code": 404,
+                "status": "Not Found",
+                "message": "Token not found",
+                "data": None,
+            }
+        }
+    },
+}
+
+@router.delete(
+    "/fcm-token",
+    response_model=APIResponse[None],
+    status_code=status.HTTP_200_OK,
+    summary="Unregister a device FCM token",
+    responses={200: _DELETE_RESPONSE_200, 404: _DELETE_RESPONSE_404, 429: _RESPONSE_429},
+)
+@limiter.limit("20/minute")
+async def unregister_fcm_token(
+    request: Request,
+    token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Unregister a device's Firebase Cloud Messaging (FCM) token so it no longer receives
+    push notifications.
+
+    **Rate limit:** 20 requests / minute / IP
+    """
+    result = await db.execute(
+        select(FCMToken).where(FCMToken.token == token)
+    )
+    token_row = result.scalar_one_or_none()
+
+    if not token_row:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Token not found")
+
+    await db.delete(token_row)
+    await db.flush()
+
+    return ok(data=None, message="Token deleted successfully")

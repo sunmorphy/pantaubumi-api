@@ -173,19 +173,22 @@ async def get_reports(
     lat: float = Query(..., description="Latitude"),
     lng: float = Query(..., description="Longitude"),
     radius: float = Query(default=DEFAULT_RADIUS_KM, description="Search radius in km", gt=0, le=500),
+    category: Optional[str] = Query(default=None, description="Optional filter by hazard category (e.g., flood, landslide, earthquake)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Returns verified community disaster reports within the given radius.
     Only returns reports where `verified=True` **and** `visible=True` (not hidden by flags).
+    Can be optionally filtered by `category`.
     """
-    result = await db.execute(
-        select(Report)
-        .where(Report.verified == True)   # noqa: E712
-        .where(Report.visible == True)    # noqa: E712 — hide flagged reports
-        .order_by(Report.created_at.desc())
-        .limit(MAX_REPORTS * 5)
-    )
+    query = select(Report).where(Report.verified == True).where(Report.visible == True)  # noqa: E712
+    
+    if category:
+        query = query.where(Report.category == category)
+        
+    query = query.order_by(Report.created_at.desc()).limit(MAX_REPORTS * 5)
+    
+    result = await db.execute(query)
     all_reports = result.scalars().all()
 
     nearby = [
