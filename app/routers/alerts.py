@@ -14,7 +14,7 @@ from app.utils.geo import haversine
 router = APIRouter()
 
 DEFAULT_RADIUS_KM = 100.0
-MAX_LIMIT = 50
+MAX_LIMIT = 60
 DEFAULT_LIMIT = 20
 # Over-fetch factor to compensate for Python-side geo filtering
 _FETCH_MULTIPLIER = 10
