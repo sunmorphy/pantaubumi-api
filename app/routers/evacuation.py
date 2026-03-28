@@ -1,14 +1,12 @@
+import httpx
 from typing import List
+import random
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.database import get_db
-from app.models.evacuation import EvacuationPoint
 from app.schemas.evacuation import EvacuationResponse
 from app.schemas.response import APIResponse, ok
 from app.utils.geo import haversine
+from app.utils.cache import get_cached_evacuation, set_cached_evacuation
 
 router = APIRouter()
 
@@ -24,24 +22,14 @@ _RESPONSE_200 = {
                 "data": [
                     {
                         "id": 1,
-                        "name": "Gedung Serbaguna RW 05",
-                        "lat": -6.201,
-                        "lng": 106.849,
+                        "name": "RSUD Dr. Soetomo",
+                        "lat": -7.267,
+                        "lng": 112.758,
                         "capacity": 200,
-                        "type": "community_hall",
-                        "address": "Jl. Merdeka No. 1, Jakarta Pusat",
-                        "distance_km": 0.18,
-                    },
-                    {
-                        "id": 7,
-                        "name": "SDN Menteng 01",
-                        "lat": -6.195,
-                        "lng": 106.844,
-                        "capacity": 300,
-                        "type": "school",
-                        "address": "Jl. HOS Cokroaminoto, Jakarta",
-                        "distance_km": 0.94,
-                    },
+                        "type": "hospital",
+                        "address": "Jl. Mayjen Prof. Dr. Moestopo",
+                        "distance_km": 0.5,
+                    }
                 ],
             }
         }
@@ -52,39 +40,78 @@ _RESPONSE_200 = {
 @router.get(
     "/evacuation",
     response_model=APIResponse[List[EvacuationResponse]],
-    summary="Get nearest evacuation points",
+    summary="Get live evacuation points via OpenStreetMap",
     responses={200: _RESPONSE_200},
 )
 async def get_evacuation(
     lat: float = Query(..., description="Latitude"),
     lng: float = Query(..., description="Longitude"),
-    limit: int = Query(default=5, description="Max number of results (1–10)", ge=1, le=MAX_RESULTS),
-    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=5, description="Max number of results (1-10)", ge=1, le=MAX_RESULTS),
 ):
     """
-    Returns the nearest evacuation shelters sorted by distance from the given coordinates.
+    Returns nearest evacuation shelters by polling OpenStreetMap (Overpass API)
+    for real-world hospitals, schools, mosques, etc. taking into account distance.
+    Results are heavily cached per ~1km grid to prevent rate-limiting.
     """
-    result = await db.execute(select(EvacuationPoint))
-    all_points = result.scalars().all()
+    cached = get_cached_evacuation(lat, lng)
+    if cached is not None:
+        # Re-sort cached results using exact queried lat/lng
+        for p in cached:
+            p["distance_km"] = round(haversine(lat, lng, p["lat"], p["lng"]), 2)
+        cached.sort(key=lambda x: x["distance_km"])
+        return ok(data=cached[:limit])
 
-    points_with_dist = [
-        (point, haversine(lat, lng, point.lat, point.lng))
-        for point in all_points
-    ]
-    points_with_dist.sort(key=lambda x: x[1])
+    # Fetch from Overpass API (3km radius)
+    query = f"""
+    [out:json][timeout:15];
+    (
+      node["amenity"~"hospital|clinic|community_centre|school|place_of_worship|police|fire_station"](around:3000,{lat},{lng});
+      way["amenity"~"hospital|clinic|community_centre|school|place_of_worship|police|fire_station"](around:3000,{lat},{lng});
+    );
+    out center;
+    """
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post("https://overpass-api.de/api/interpreter", data={"data": query}, timeout=15.0)
+            resp.raise_for_status()
+            osm_data = resp.json()
+        except Exception as e:
+            print("Overpass API failed:", e)
+            return ok(data=[])
 
-    data = [
-        EvacuationResponse(
-            id=point.id,
-            name=point.name,
-            lat=point.lat,
-            lng=point.lng,
-            capacity=point.capacity,
-            type=point.type,
-            address=point.address,
-            distance_km=round(dist, 2),
-        ).model_dump(mode="json")
-        for point, dist in points_with_dist[:limit]
-    ]
+    elements = osm_data.get("elements", [])
+    extracted = []
+    
+    for el in elements:
+        tags = el.get("tags", {})
+        
+        # Coords are direct on nodes, but 'center' on ways
+        el_lat = el.get("lat") or el.get("center", {}).get("lat")
+        el_lng = el.get("lon") or el.get("center", {}).get("lon")
+        
+        if not el_lat or not el_lng:
+            continue
+            
+        amenity = tags.get("amenity", "community_centre")
+        name = tags.get("name", f"Unknown Shelter ({amenity.replace('_', ' ').title()})")
+        addr = tags.get("addr:street", tags.get("addr:full", ""))
+        
+        dist = haversine(lat, lng, el_lat, el_lng)
+        
+        extracted.append({
+            "id": el.get("id", random.randint(1000, 99999)),
+            "name": name,
+            "lat": el_lat,
+            "lng": el_lng,
+            "capacity": 200,  # Generic static fallback
+            "type": amenity,
+            "address": addr,
+            "distance_km": round(dist, 2)
+        })
 
-    return ok(data=data)
+    # Sort and Cache
+    extracted.sort(key=lambda x: x["distance_km"])
+    set_cached_evacuation(lat, lng, extracted)
+    
+    return ok(data=extracted[:limit])

@@ -13,7 +13,7 @@ class ReportCreate(BaseModel):
         description="Incident description in Indonesian (min 10 characters)",
     )
     category: str = Field(
-        default="other",
+        default="Lainnya",
         description="Incident category hint — overridden by NLP classifier if detected",
     )
 

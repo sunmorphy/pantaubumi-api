@@ -100,12 +100,10 @@ async def get_alerts(
 
     **Severity levels:** `low` · `medium` · `high` · `critical`
     """
-    since = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
 
     # Build query with optional cursor filter
     query = (
         select(Alert)
-        .where(Alert.created_at >= since)
         .order_by(Alert.created_at.desc(), Alert.id.desc())
         .limit(limit * _FETCH_MULTIPLIER)  # over-fetch to compensate for geo filter
     )

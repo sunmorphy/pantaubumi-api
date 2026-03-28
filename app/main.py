@@ -110,7 +110,7 @@ _TAGS_METADATA = [
             "- Max **5 reports per hour** per device ID\n"
             "- **10-minute cooldown** between consecutive submissions\n\n"
             "**AI verification:** IndoBERT classifier filters spam before any report goes public. "
-            "Only `verified=true` **and** `visible=true` reports appear in `GET /reports`.\n\n"
+            "Only `visible=true` reports appear in `GET /reports`.\n\n"
             "**Community flagging:** `POST /reports/{id}/flag` — 3 unique flags auto-hides a report."
         ),
     },

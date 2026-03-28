@@ -43,7 +43,7 @@ _RESPONSE_200 = {
                         "lat": -6.21,
                         "lng": 106.80,
                         "text": "Banjir parah di depan rumah saya, air sudah setinggi lutut!",
-                        "category": "flood",
+                        "category": "Banjir",
                         "verified": True,
                         "verification_score": 0.85,
                         "source": "user",
@@ -69,7 +69,7 @@ _RESPONSE_201 = {
                     "lat": -6.2,
                     "lng": 106.8,
                     "text": "Banjir besar melanda kampung kami, air sudah setinggi dada orang dewasa!",
-                    "category": "flood",
+                    "category": "Banjir",
                     "verified": True,
                     "verification_score": 0.85,
                     "source": "user",
@@ -173,16 +173,16 @@ async def get_reports(
     lat: float = Query(..., description="Latitude"),
     lng: float = Query(..., description="Longitude"),
     radius: float = Query(default=DEFAULT_RADIUS_KM, description="Search radius in km", gt=0, le=500),
-    category: Optional[str] = Query(default=None, description="Optional filter by hazard category (e.g., flood, landslide, earthquake)"),
+    category: Optional[str] = Query(default=None, description="Optional filter by hazard category (e.g., Banjir, Longsor, Gempa)"),
     limit: int = Query(default=50, description="Max number of reports to return", gt=0, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Returns verified community disaster reports within the given radius.
-    Only returns reports where `verified=True` **and** `visible=True` (not hidden by flags).
+    Only returns reports where `visible=True` (not hidden by flags).
     Can be optionally filtered by `category`.
     """
-    query = select(Report).where(Report.verified == True).where(Report.visible == True)  # noqa: E712
+    query = select(Report).where(Report.visible == True)  # noqa: E712
     
     if category:
         query = query.where(Report.category == category)
@@ -215,7 +215,7 @@ async def create_report(
     lat: float = Form(..., description="Latitude of the incident"),
     lng: float = Form(..., description="Longitude of the incident"),
     text: str = Form(..., min_length=10, max_length=2000, description="Incident description"),
-    category: str = Form("other", description="Incident category hint"),
+    category: str = Form("Lainnya", description="Incident category hint"),
     image: Optional[UploadFile] = File(None, description="Optional photo of the incident"),
     db: AsyncSession = Depends(get_db),
     device_id: str = Depends(_get_device_id),
@@ -238,7 +238,7 @@ async def create_report(
     - `verification_score` — classifier confidence (0–1)
     - `category` — detected category overrides your hint if a match is found
 
-    **Valid categories:** `flood` · `landslide` · `earthquake` · `fire` · `other`
+    **Valid categories:** `Banjir` · `Longsor` · `Gempa` · `Kebakaran` · `Lainnya`
     """
     # ── Per-device rate checks (only when a device_id is provided) ─────────────
     if device_id:
@@ -278,7 +278,7 @@ async def create_report(
     # ── AI classification ──────────────────────────────────────────────────────
     verification = verify_report(text)
 
-    final_category = verification.category if verification.category != "other" else category
+    final_category = verification.category if verification.category != "Lainnya" else category
 
     # ── Cloudflare R2 Image Upload ──
     image_url = None

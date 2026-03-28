@@ -137,11 +137,11 @@ def test_get_reports_returns_list():
 def test_get_reports_category_filter():
     """Test that the category query param correctly filters results."""
     # Note: we assume the test DB has random records, so we just test the param is accepted
-    resp = client.get("/reports", params={"lat": -6.2, "lng": 106.8, "radius": 10, "category": "flood"})
+    resp = client.get("/reports", params={"lat": -6.2, "lng": 106.8, "radius": 10, "category": "Banjir"})
     data = _ok(resp)
     assert isinstance(data, list)
     for report in data:
-        assert report["category"] == "flood"
+        assert report["category"] == "Banjir"
 
 
 def test_get_reports_limit():
@@ -162,7 +162,7 @@ def test_post_report_flood():
     payload = {
         "lat": -6.2, "lng": 106.8,
         "text": "Banjir parah di depan rumah saya, air sudah setinggi lutut!",
-        "category": "flood",
+        "category": "Banjir",
     }
     resp = client.post("/reports", data=payload, headers=_device_headers())
     data = _ok(resp, 201)
@@ -175,7 +175,7 @@ def test_post_report_flood():
 
 
 def test_post_report_too_short():
-    payload = {"lat": -6.2, "lng": 106.8, "text": "Banjir", "category": "flood"}
+    payload = {"lat": -6.2, "lng": 106.8, "text": "Banjir", "category": "Banjir"}
     _err(client.post("/reports", data=payload), 422)
 
 
@@ -188,7 +188,7 @@ def test_post_report_with_image(mock_upload):
     payload = {
         "lat": -6.2, "lng": 106.8,
         "text": "Banjir parah di depan rumah saya, air sudah setinggi lutut!",
-        "category": "flood",
+        "category": "Banjir",
     }
     files = {"image": ("photo.jpg", b"fake-image-bytes", "image/jpeg")}
     
@@ -203,7 +203,7 @@ def test_post_report_then_visible_in_get():
     payload = {
         "lat": -6.21, "lng": 106.80,
         "text": "Tanah longsor terjadi di lereng bukit, warga diminta mengungsi segera!",
-        "category": "landslide",
+        "category": "Longsor",
     }
     post_resp = client.post("/reports", data=payload, headers=_device_headers())
     created = _ok(post_resp, 201)
@@ -240,7 +240,7 @@ def test_device_cooldown_enforced():
     payload = {
         "lat": -6.3, "lng": 106.9,
         "text": "Banjir parah melanda kawasan ini, jalan sudah tidak bisa dilalui!",
-        "category": "flood",
+        "category": "Banjir",
     }
 
     # First submission should succeed
@@ -262,7 +262,7 @@ def _submit_report(text_suffix: str = "") -> int:
     payload = {
         "lat": -6.5, "lng": 107.2,
         "text": f"Banjir besar dan parah di wilayah ini, air terus naik! {text_suffix}",
-        "category": "flood",
+        "category": "Banjir",
     }
     resp = client.post("/reports", data=payload, headers=_device_headers())
     assert resp.status_code == 201, resp.text
@@ -383,7 +383,7 @@ def test_earthquake_no_trigger():
 def test_report_verifier_detects_flood():
     from app.ai.report_verifier import verify_report
     result = verify_report("Banjir besar melanda kampung kami, air sudah sangat tinggi!")
-    assert result.is_valid and result.category == "flood"
+    assert result.is_valid and result.category == "Banjir"
 
 
 def test_report_verifier_rejects_non_disaster():

@@ -203,7 +203,7 @@ Recent disaster alerts near a coordinate. **Cursor-paginated.**
     "items": [
       {
         "id": 42,
-        "type": "earthquake",
+        "type": "Gempa",
         "lat": -6.5,
         "lng": 107.1,
         "severity": "high",
@@ -286,7 +286,7 @@ curl "http://localhost:8000/evacuation?lat=-6.2&lng=106.8&limit=3"
 ### `GET /reports`
 Verified community disaster reports within a radius.
 
-Only returns reports where **`verified=true` AND `visible=true`**. Reports auto-hidden by 3+ flags are excluded.
+Only returns reports where **`visible=true`**. Reports auto-hidden by 3+ flags are excluded.
 
 #### Query Parameters
 
@@ -295,7 +295,7 @@ Only returns reports where **`verified=true` AND `visible=true`**. Reports auto-
 | `lat` | float | Yes | — | Latitude |
 | `lng` | float | Yes | — | Longitude |
 | `radius` | float | No | `10.0` (max 500) | Search radius in km |
-| `category` | string | No | — | Filter by hazard (`flood`, `landslide`, etc.) |
+| `category` | string | No | — | Filter by hazard (`Banjir`, `Longsor`, etc.) |
 | `limit` | int | No | `50` (max 100) | Max number of reports to return |
 
 #### Response `200`
@@ -310,7 +310,7 @@ Only returns reports where **`verified=true` AND `visible=true`**. Reports auto-
       "lat": -6.21,
       "lng": 106.80,
       "text": "Banjir parah di depan rumah saya, air sudah setinggi lutut!",
-      "category": "flood",
+      "category": "Banjir",
       "verified": true,
       "verification_score": 0.85,
       "source": "user",
@@ -348,7 +348,7 @@ Unlike other endpoints, `POST /reports` accepts **`multipart/form-data`** to sup
 | `lat` | float | Yes | — |
 | `lng` | float | Yes | — |
 | `text` | string | Yes | 10–2000 chars |
-| `category` | string | No | default `"other"` |
+| `category` | string | No | default `"Lainnya"` |
 | `image` | binary file | No | JPEG/PNG/WebP format |
 
 #### Response `201`
@@ -362,7 +362,7 @@ Unlike other endpoints, `POST /reports` accepts **`multipart/form-data`** to sup
     "lat": -6.2,
     "lng": 106.8,
     "text": "Banjir besar melanda kampung kami, air sudah setinggi dada!",
-    "category": "flood",
+    "category": "Banjir",
     "image_url": "https://pub-xxxx.r2.dev/reports/1234_abcd.jpg",
     "verified": true,
     "verification_score": 0.85,
@@ -387,7 +387,7 @@ curl -X POST http://localhost:8000/reports \
   -F 'lat=-6.2' \
   -F 'lng=106.8' \
   -F 'text=Tanah longsor di lereng bukit!' \
-  -F 'category=landslide' \
+  -F 'category=Longsor' \
   -F 'image=@/path/to/photo.jpg'
 ```
 
@@ -562,7 +562,7 @@ Runs every **5 minutes** via APScheduler:
 | `id` | int PK | Auto-increment |
 | `lat`, `lng` | float | Incident coordinates |
 | `text` | text | Report text |
-| `category` | varchar | `flood` / `landslide` / `earthquake` / `fire` / `other` |
+| `category` | varchar | `Banjir` / `Longsor` / `Gempa` / `Kebakaran` / `Lainnya` |
 | `image_url` | varchar | Public URL of the uploaded image (from Cloudflare R2) |
 | `verified` | bool | IndoBERT classification result |
 | `verification_score` | float | Classifier confidence (0–1) |

@@ -16,8 +16,8 @@ class Report(Base):
 
     text: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # e.g. "flood", "landslide", "earthquake", "fire", "other"
-    category: Mapped[str] = mapped_column(String(50), default="other")
+    # e.g. "Banjir", "Longsor", "Gempa", "Kebakaran", "Lainnya"
+    category: Mapped[str] = mapped_column(String(50), default="Lainnya")
 
     # Optional image uploaded to Firebase Storage
     image_url: Mapped[str] = mapped_column(String(500), nullable=True)

@@ -16,18 +16,18 @@ from dataclasses import dataclass
 
 
 DISASTER_KEYWORDS = {
-    "flood": [
+    "Banjir": [
         "banjir", "banjir bandang", "genangan", "air naik", "meluap",
         "tenggelam", "terendam", "hujan deras",
     ],
-    "landslide": [
+    "Longsor": [
         "tanah longsor", "longsor", "lereng ambles", "material longsoran",
         "kebun ambles",
     ],
-    "earthquake": [
+    "Gempa": [
         "gempa", "gempa bumi", "guncangan", "getaran", "tsunami",
     ],
-    "fire": [
+    "Kebakaran": [
         "kebakaran", "api", "terbakar", "asap tebal",
     ],
 }
@@ -39,8 +39,7 @@ ALL_KEYWORDS = [kw for kws in DISASTER_KEYWORDS.values() for kw in kws]
 class VerificationResult:
     is_valid: bool          # True if the report appears to be a real disaster report
     confidence: float       # 0.0 – 1.0
-    category: str           # Detected category, or "other"
-
+    category: str           # Detected category, or "Lainnya"
 
 def _keyword_verify(text: str) -> VerificationResult:
     """Fast heuristic verifier based on Indonesian disaster keywords."""
@@ -48,10 +47,10 @@ def _keyword_verify(text: str) -> VerificationResult:
     matched = [kw for kw in ALL_KEYWORDS if re.search(rf"\b{re.escape(kw)}\b", text_lower)]
 
     if not matched:
-        return VerificationResult(is_valid=False, confidence=0.15, category="other")
+        return VerificationResult(is_valid=False, confidence=0.15, category="Lainnya")
 
     # Determine primary category by first match
-    category = "other"
+    category = "Lainnya"
     for cat, kws in DISASTER_KEYWORDS.items():
         if any(kw in matched for kw in kws):
             category = cat
@@ -60,7 +59,6 @@ def _keyword_verify(text: str) -> VerificationResult:
     # Confidence scales with number of matched keywords (up to ~0.9)
     confidence = min(0.9, 0.4 + len(matched) * 0.15)
     return VerificationResult(is_valid=True, confidence=confidence, category=category)
-
 
 def verify_report(text: str) -> VerificationResult:
     """
@@ -72,7 +70,6 @@ def verify_report(text: str) -> VerificationResult:
     if os.getenv("INDOBERT_ENABLED", "false").lower() == "true":
         return _indobert_verify(text)
     return _keyword_verify(text)
-
 
 def _indobert_verify(text: str) -> VerificationResult:
     """
@@ -105,7 +102,7 @@ def _indobert_verify(text: str) -> VerificationResult:
     return VerificationResult(
         is_valid=is_valid,
         confidence=float(score),
-        category=label if label in DISASTER_KEYWORDS else "other",
+        category=label if label in DISASTER_KEYWORDS else "Lainnya",
     )
 
 

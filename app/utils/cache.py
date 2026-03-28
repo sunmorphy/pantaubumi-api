@@ -72,12 +72,14 @@ def set_cached_seismic(lat: float, lng: float, data: dict) -> None:
     _seismic_store[key] = data
     _timestamps[key] = time.time()
 
-
 def get_cached_seismic(lat: float, lng: float) -> dict:
     key = _grid_key(lat, lng, "eq")
     if _is_fresh(key):
         return _seismic_store[key]
-    return {"magnitude": 0.0, "distance_km": 9999.0}
+        
+    # TEMPORARY TEST: Simulate a massive M8.5 earthquake 5km away!
+    return {"magnitude": 8.5, "distance_km": 5.0} 
+
 
 
 # ── Generic TTL cache ─────────────────────────────────────────────────────────
@@ -96,3 +98,23 @@ def cache_get(key: str) -> Optional[Any]:
             return value
         _generic_store.pop(key, None)
     return None
+
+
+# ── Evacuation ────────────────────────────────────────────────────────────────
+
+def _evac_grid_key(lat: float, lng: float) -> str:
+    """Snap to ~1km grid (0.01 deg) for caching Overpass API."""
+    snapped_lat = round(lat, 2)
+    snapped_lng = round(lng, 2)
+    return f"evac:{snapped_lat}:{snapped_lng}"
+
+
+def set_cached_evacuation(lat: float, lng: float, data: list) -> None:
+    # 24 hour TTL for static buildings
+    key = _evac_grid_key(lat, lng)
+    cache_set(key, data, ttl=86400)
+
+
+def get_cached_evacuation(lat: float, lng: float) -> Optional[list]:
+    key = _evac_grid_key(lat, lng)
+    return cache_get(key)
