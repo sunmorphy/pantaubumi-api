@@ -100,11 +100,11 @@ async def get_evacuation(
         dist = haversine(lat, lng, el_lat, el_lng)
         
         extracted.append({
-            "id": el.get("id", random.randint(1000, 99999)),
+            "id": el.get("id", 0),
             "name": name,
             "lat": el_lat,
             "lng": el_lng,
-            "capacity": 200,  # Generic static fallback
+            "capacity": 0,  # 0 indicates unknown capacity since OSM doesn't provide it
             "type": amenity,
             "address": addr,
             "distance_km": round(dist, 2)

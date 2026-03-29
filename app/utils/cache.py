@@ -77,9 +77,7 @@ def get_cached_seismic(lat: float, lng: float) -> dict:
     if _is_fresh(key):
         return _seismic_store[key]
         
-    # TEMPORARY TEST: Simulate a massive M8.5 earthquake 5km away!
-    return {"magnitude": 8.5, "distance_km": 5.0} 
-
+    return {"magnitude": 0.0, "distance_km": 9999.0}
 
 
 # ── Generic TTL cache ─────────────────────────────────────────────────────────
